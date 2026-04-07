@@ -1,0 +1,1311 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MAVIN Pre-order & Click-and-Collect API",
+    "description": "Полный MVP API сервиса предзаказа еды. Роли: Покупатель, Владелец ресторана, Администратор. Модуль доставки исключен. Хранилище файлов: S3/MinIO. Уведомления: WebSocket.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Base API URL"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Авторизация и профиль" },
+    { "name": "Allergens", "description": "Справочник аллергенов" },
+    { "name": "Categories", "description": "Категории кухни" },
+    { "name": "Restaurants (Public)", "description": "Каталог ресторанов" },
+    { "name": "Restaurants (Restaurant Admin)", "description": "Управление своим рестораном (администратор ресторана)" },
+    { "name": "Restaurants (Site Admin)", "description": "Модерация ресторанов (администратор сайта)" },
+    { "name": "Menu (Public)", "description": "Просмотр меню" },
+    { "name": "Menu (Restaurant Admin)", "description": "Управление меню (администратор ресторана)" },
+    { "name": "Cart", "description": "Корзина" },
+    { "name": "Orders (Customer)", "description": "Оформление заказов" },
+    { "name": "Orders (Restaurant Admin)", "description": "Обработка заказов на кухне (администратор ресторана)" },
+    { "name": "Subscriptions", "description": "Подписка Студент+" },
+    { "name": "AI Assistant", "description": "ИИ-нутрициолог" },
+    { "name": "Promo Codes", "description": "Промокоды" },
+    { "name": "Favorites & Reviews", "description": "Избранное и отзывы" },
+    { "name": "Upload", "description": "Загрузка файлов (S3/MinIO)" },
+    { "name": "Admin", "description": "Панель администратора сайта" }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Регистрация покупателя",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "phone", "password", "first_name", "last_name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "ivan@example.com" },
+                  "phone": { "type": "string", "example": "+79001234567" },
+                  "password": { "type": "string", "example": "secret123" },
+                  "first_name": { "type": "string", "example": "Иван" },
+                  "last_name": { "type": "string", "example": "Иванов" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Успешно", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "409": { "description": "Email или телефон уже заняты" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Вход в систему",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "ivan@example.com" },
+                  "password": { "type": "string", "example": "secret123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Успешно", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "401": { "description": "Неверные данные" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Выход",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Токен инвалидирован", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Текущий профиль",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } } } }
+      }
+    },
+    "/profile": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Обновить профиль",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "first_name": { "type": "string", "example": "Иван" },
+                  "last_name": { "type": "string", "example": "Иванов" },
+                  "email": { "type": "string", "example": "ivan@example.com" },
+                  "allergen_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3], "description": "ID аллергенов из справочника" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } } } }
+      }
+    },
+    "/profile/password": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Сменить пароль",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["old_password", "new_password"],
+                "properties": {
+                  "old_password": { "type": "string", "example": "secret123" },
+                  "new_password": { "type": "string", "example": "newsecret456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/allergens": {
+      "get": {
+        "tags": ["Allergens"],
+        "summary": "Список всех аллергенов",
+        "description": "Справочник аллергенов для отображения в фильтрах и профиле пользователя",
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Allergen" } } } } } }
+      }
+    },
+    "/admin/allergens": {
+      "post": {
+        "tags": ["Allergens"],
+        "summary": "Создать аллерген (Админ)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Глютен" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Создано", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Allergen" } } } } }
+      }
+    },
+    "/admin/allergens/{id}": {
+      "put": {
+        "tags": ["Allergens"],
+        "summary": "Изменить аллерген",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Лактоза" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Allergen" } } } } }
+      },
+      "delete": {
+        "tags": ["Allergens"],
+        "summary": "Удалить аллерген",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Удалено" } }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "Список категорий",
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } } } } } }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Создать категорию (Админ)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Бургеры" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Создано", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } } }
+      }
+    },
+    "/categories/{id}": {
+      "put": {
+        "tags": ["Categories"],
+        "summary": "Изменить категорию",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Пицца" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } } }
+      },
+      "delete": {
+        "tags": ["Categories"],
+        "summary": "Удалить категорию",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Удалено" } }
+      }
+    },
+    "/restaurants": {
+      "get": {
+        "tags": ["Restaurants (Public)"],
+        "summary": "Каталог ресторанов",
+        "parameters": [
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_RestaurantPublic" } } } } }
+      }
+    },
+    "/restaurants/{id}": {
+      "get": {
+        "tags": ["Restaurants (Public)"],
+        "summary": "Карточка ресторана",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RestaurantPublic" } } } } }
+      }
+    },
+    "/owner/restaurant": {
+      "get": {
+        "tags": ["Restaurants (Restaurant Admin)"],
+        "summary": "Профиль моего ресторана (администратор ресторана)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RestaurantOwner" } } } } }
+      },
+      "put": {
+        "tags": ["Restaurants (Restaurant Admin)"],
+        "summary": "Обновить профиль",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "example": "Бургер Кинг" },
+                  "description": { "type": "string", "example": "Лучшие бургеры в городе" },
+                  "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
+                  "pickup_address": { "type": "string", "example": "ул. Ленина, 10" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RestaurantOwner" } } } } }
+      }
+    },
+    "/admin/restaurants": {
+      "get": {
+        "tags": ["Restaurants (Site Admin)"],
+        "summary": "Все рестораны системы",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_RestaurantAdmin" } } } } }
+      },
+      "post": {
+        "tags": ["Restaurants (Site Admin)"],
+        "summary": "Завести новый ресторан",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "pickup_address", "restaurant_admin_id", "category_ids"],
+                "properties": {
+                  "name": { "type": "string", "example": "Суши Мастер" },
+                  "pickup_address": { "type": "string", "example": "пр. Мира, 15" },
+                  "restaurant_admin_id": { "type": "integer", "example": 42 },
+                  "category_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3] }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Создан", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RestaurantAdmin" } } } } }
+      }
+    },
+    "/admin/restaurants/{id}": {
+      "put": {
+        "tags": ["Restaurants (Site Admin)"],
+        "summary": "Изменить статус ресторана",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["is_active"],
+                "properties": {
+                  "is_active": { "type": "boolean", "example": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RestaurantAdmin" } } } } }
+      },
+      "delete": {
+        "tags": ["Restaurants (Site Admin)"],
+        "summary": "Удалить ресторан",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Удалено" } }
+      }
+    },
+    "/restaurants/{id}/menu": {
+      "get": {
+        "tags": ["Menu (Public)"],
+        "summary": "Меню ресторана",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "max_calories", "in": "query", "description": "Максимум калорий на блюдо", "schema": { "type": "integer" } },
+          { "name": "max_price", "in": "query", "description": "Максимальная цена", "schema": { "type": "number" } },
+          { "name": "exclude_allergen_ids", "in": "query", "description": "ID аллергенов для исключения (через запятую)", "schema": { "type": "string", "example": "1,3" } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuItemPublic" } } } } } }
+      }
+    },
+    "/owner/menu": {
+      "get": {
+        "tags": ["Menu (Restaurant Admin)"],
+        "summary": "Всё меню (вкл. стоп-лист)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuItemOwner" } } } } } }
+      },
+      "post": {
+        "tags": ["Menu (Restaurant Admin)"],
+        "summary": "Добавить блюдо",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MenuItemCreate" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Создано", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MenuItemOwner" } } } } }
+      }
+    },
+    "/owner/menu/{id}": {
+      "put": {
+        "tags": ["Menu (Restaurant Admin)"],
+        "summary": "Изменить блюдо",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MenuItemCreate" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MenuItemOwner" } } } } }
+      },
+      "delete": {
+        "tags": ["Menu (Restaurant Admin)"],
+        "summary": "Удалить блюдо",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Удалено" } }
+      }
+    },
+    "/owner/menu/{id}/availability": {
+      "patch": {
+        "tags": ["Menu (Restaurant Admin)"],
+        "summary": "Стоп-лист (Скрыть/показать)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["is_available"],
+                "properties": {
+                  "is_available": { "type": "boolean", "example": false }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MenuItemOwner" } } } } }
+      }
+    },
+    "/cart": {
+      "get": {
+        "tags": ["Cart"],
+        "summary": "Посмотреть корзину",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Cart" } } } } }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Очистить корзину",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "204": { "description": "Корзина очищена" } }
+      }
+    },
+    "/cart/items": {
+      "post": {
+        "tags": ["Cart"],
+        "summary": "Добавить блюдо",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["menu_item_id", "quantity"],
+                "properties": {
+                  "menu_item_id": { "type": "integer", "example": 105 },
+                  "quantity": { "type": "integer", "example": 2 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Cart" } } } },
+          "409": { "description": "Блюдо из другого ресторана" }
+        }
+      }
+    },
+    "/cart/items/{item_id}": {
+      "put": {
+        "tags": ["Cart"],
+        "summary": "Изменить кол-во",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["quantity"],
+                "properties": {
+                  "quantity": { "type": "integer", "example": 3 }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Cart" } } } } }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Убрать блюдо",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Убрано" } }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": ["Orders (Customer)"],
+        "summary": "Моя история заказов",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_OrderListItem" } } } } }
+      },
+      "post": {
+        "tags": ["Orders (Customer)"],
+        "summary": "Оформить заказ (Самовывоз)",
+        "description": "Логика скидок: применяется наибольшая из двух — промокод или скидка подписки 5%. Скидки НЕ складываются. Промокоды одноразовые (один промокод — один раз на пользователя).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["pickup_time", "payment_method"],
+                "properties": {
+                  "pickup_time": { "type": "string", "format": "date-time", "example": "2025-05-20T14:30:00Z" },
+                  "comment": { "type": "string", "example": "Без лука, пожалуйста" },
+                  "payment_method": { "type": "string", "enum": ["card_online", "cash_on_receipt"], "example": "card_online" },
+                  "promo_code": { "type": "string", "example": "STUDENT" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Заказ оформлен", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderDetail" } } } },
+          "404": { "description": "Промокод не найден или истёк" },
+          "409": { "description": "Блюдо из корзины закончилось (недоступно)" }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": ["Orders (Customer)"],
+        "summary": "Детали моего заказа",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderDetail" } } } } }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "tags": ["Orders (Customer)"],
+        "summary": "Отменить заказ",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "422": { "description": "Нельзя отменить (уже готовится)" }
+        }
+      }
+    },
+    "/owner/orders": {
+      "get": {
+        "tags": ["Orders (Restaurant Admin)"],
+        "summary": "Активные заказы кухни",
+        "description": "Ресторан определяется по JWT администратора ресторана. Заказы premium-клиентов — первыми. При смене статуса — WebSocket-событие клиенту.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["created", "cooking", "ready_for_pickup"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_OwnerOrderListItem" } } } } }
+      }
+    },
+    "/owner/orders/{id}": {
+      "get": {
+        "tags": ["Orders (Restaurant Admin)"],
+        "summary": "Детали заказа для кухни",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OwnerOrderDetail" } } } } }
+      }
+    },
+    "/owner/orders/{id}/accept": {
+      "post": {
+        "tags": ["Orders (Restaurant Admin)"],
+        "summary": "Принять в работу (cooking)",
+        "description": "Отправляет WS-событие покупателю",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OwnerOrderDetail" } } } } }
+      }
+    },
+    "/owner/orders/{id}/ready": {
+      "post": {
+        "tags": ["Orders (Restaurant Admin)"],
+        "summary": "Собрано (ready_for_pickup)",
+        "description": "Отправляет WS-событие: «Можно забирать»",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OwnerOrderDetail" } } } } }
+      }
+    },
+    "/owner/orders/{id}/complete": {
+      "post": {
+        "tags": ["Orders (Restaurant Admin)"],
+        "summary": "Выдано клиенту (completed)",
+        "description": "Отправляет WS-событие покупателю",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OwnerOrderDetail" } } } } }
+      }
+    },
+    "/subscriptions/plans": {
+      "get": {
+        "tags": ["Subscriptions"],
+        "summary": "Доступные тарифы",
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SubscriptionPlan" } } } } } }
+      }
+    },
+    "/subscriptions/my": {
+      "get": {
+        "tags": ["Subscriptions"],
+        "summary": "Моя подписка",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserSubscription" } } } } }
+      }
+    },
+    "/subscriptions/buy": {
+      "post": {
+        "tags": ["Subscriptions"],
+        "summary": "Оформить подписку",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["plan_id"],
+                "properties": {
+                  "plan_id": { "type": "integer", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Подписка оформлена", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserSubscription" } } } } }
+      }
+    },
+    "/subscriptions/cancel": {
+      "post": {
+        "tags": ["Subscriptions"],
+        "summary": "Отменить подписку",
+        "description": "Подписка остаётся активной до конца оплаченного периода, после чего is_premium автоматически сбрасывается в false.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Подписка будет отменена по окончании периода", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserSubscription" } } } },
+          "404": { "description": "Активная подписка не найдена" }
+        }
+      }
+    },
+    "/ai/recommend": {
+      "post": {
+        "tags": ["AI Assistant"],
+        "summary": "Спросить нутрициолога",
+        "description": "Только для премиум-пользователей. Бэкенд загружает меню ресторана (с учётом аллергенов из профиля), формирует контекст и отправляет в LLM. История сохраняется в БД для аналитики.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["prompt", "restaurant_id"],
+                "properties": {
+                  "prompt": { "type": "string", "example": "Хочу ужин до 500 ккал без глютена" },
+                  "restaurant_id": { "type": "integer", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AIRecommendation" } } } },
+          "403": { "description": "Нужна подписка" },
+          "503": { "description": "LLM-сервис временно недоступен" }
+        }
+      }
+    },
+    "/promo": {
+      "get": {
+        "tags": ["Promo Codes"],
+        "summary": "Доступные промокоды",
+        "description": "Список активных и не истёкших промокодов, доступных для использования.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_PromoCode" } } } } }
+      }
+    },
+    "/promo/validate": {
+      "post": {
+        "tags": ["Promo Codes"],
+        "summary": "Проверить промокод",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code"],
+                "properties": {
+                  "code": { "type": "string", "example": "STUDENT" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PromoCode" } } } },
+          "404": { "description": "Промокод не найден или истёк" }
+        }
+      }
+    },
+    "/admin/promo": {
+      "get": {
+        "tags": ["Promo Codes"],
+        "summary": "Все промокоды",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_PromoCode" } } } } }
+      },
+      "post": {
+        "tags": ["Promo Codes"],
+        "summary": "Создать промокод",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "discount_percent"],
+                "properties": {
+                  "code": { "type": "string", "example": "SUMMER25" },
+                  "discount_percent": { "type": "integer", "example": 15 },
+                  "expires_at": { "type": "string", "format": "date-time", "example": "2025-12-31T23:59:59Z" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PromoCode" } } } } }
+      }
+    },
+    "/admin/promo/{id}": {
+      "put": {
+        "tags": ["Promo Codes"],
+        "summary": "Изменить промокод",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "is_active": { "type": "boolean", "example": true },
+                  "discount_percent": { "type": "integer", "example": 10 },
+                  "expires_at": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PromoCode" } } } } }
+      },
+      "delete": {
+        "tags": ["Promo Codes"],
+        "summary": "Удалить промокод",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Удалено" } }
+      }
+    },
+    "/favorites": {
+      "get": {
+        "tags": ["Favorites & Reviews"],
+        "summary": "Мое избранное",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/RestaurantPublic" } } } } } }
+      }
+    },
+    "/favorites/{rest_id}": {
+      "post": {
+        "tags": ["Favorites & Reviews"],
+        "summary": "Добавить в избранное",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "rest_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      },
+      "delete": {
+        "tags": ["Favorites & Reviews"],
+        "summary": "Убрать из избранного",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "rest_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "Удалено" } }
+      }
+    },
+    "/orders/{id}/review": {
+      "post": {
+        "tags": ["Favorites & Reviews"],
+        "summary": "Оценить заказ (звёзды 1–5)",
+        "description": "Только для завершённых заказов. Средний рейтинг пересчитывается в average_rating ресторана.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReviewCreate" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Оценка добавлена", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Review" } } } },
+          "422": { "description": "Заказ не в статусе completed" }
+        }
+      }
+    },
+    "/upload": {
+      "post": {
+        "tags": ["Upload"],
+        "summary": "Загрузить изображение в S3/MinIO",
+        "description": "Файл загружается в bucket mavin-images. Бэкенд генерирует UUID-имя, загружает через minio SDK, возвращает публичный URL объекта.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "Макс. 5 МБ. Форматы: JPEG, PNG, WebP" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Файл загружен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": { "type": "string", "example": "https://minio.example.com/mavin-images/550e8400-e29b-41d4-a716-446655440000.jpg" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Неподдерживаемый формат или превышен размер" }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Список пользователей",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "role", "in": "query", "schema": { "type": "string", "enum": ["customer", "restaurant_admin", "site_admin"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_UserProfile" } } } } }
+      },
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Создать пользователя с ролью",
+        "description": "Используется для создания учётных записей администраторов ресторанов",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "phone", "password", "first_name", "last_name", "role"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "alex@example.com" },
+                  "phone": { "type": "string", "example": "+79001234567" },
+                  "password": { "type": "string", "example": "ownerpass123" },
+                  "first_name": { "type": "string", "example": "Алексей" },
+                  "last_name": { "type": "string", "example": "Петров" },
+                  "role": { "type": "string", "enum": ["restaurant_admin", "customer"], "example": "restaurant_admin" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Создан", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } } },
+          "409": { "description": "Email или телефон уже заняты" }
+        }
+      }
+    },
+    "/admin/users/{id}/block": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Бан/Разбан",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["is_blocked"],
+                "properties": {
+                  "is_blocked": { "type": "boolean", "example": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/admin/stats": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Статистика",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminStats" } } } } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string", "example": "OK" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+          "user": { "$ref": "#/components/schemas/UserProfile" }
+        }
+      },
+      "Allergen": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Глютен" }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "email": { "type": "string", "format": "email", "example": "ivan@example.com" },
+          "phone": { "type": "string", "example": "+79001234567" },
+          "first_name": { "type": "string", "example": "Иван" },
+          "last_name": { "type": "string", "example": "Иванов" },
+          "role": { "type": "string", "enum": ["customer", "restaurant_admin", "site_admin"], "example": "customer" },
+          "is_premium": { "type": "boolean", "example": true },
+          "is_blocked": { "type": "boolean", "example": false },
+          "allergens": { "type": "array", "items": { "$ref": "#/components/schemas/Allergen" }, "description": "Аллергены пользователя из справочника" }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Бургеры" }
+        }
+      },
+      "RestaurantPublic": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Бургер Кинг" },
+          "description": { "type": "string", "example": "Лучшие бургеры в городе" },
+          "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
+          "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
+          "average_rating": { "type": "number", "format": "float", "example": 4.8, "minimum": 0, "maximum": 5 }
+        }
+      },
+      "RestaurantOwner": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Бургер Кинг" },
+          "description": { "type": "string", "example": "Лучшие бургеры в городе" },
+          "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
+          "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
+          "is_active": { "type": "boolean", "example": true },
+          "average_rating": { "type": "number", "format": "float", "example": 4.8 }
+        }
+      },
+      "RestaurantAdmin": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Суши Мастер" },
+          "restaurant_admin_id": { "type": "integer", "example": 42 },
+          "is_active": { "type": "boolean", "example": true }
+        }
+      },
+      "MenuItemPublic": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 105 },
+          "name": { "type": "string", "example": "Чизбургер" },
+          "description": { "type": "string", "example": "Классический чизбургер с говядиной" },
+          "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/cheeseburger.jpg" },
+          "price": { "type": "number", "example": 150 },
+          "calories": { "type": "integer", "example": 400 },
+          "proteins": { "type": "number", "example": 15 },
+          "fats": { "type": "number", "example": 20 },
+          "carbs": { "type": "number", "example": 40 },
+          "allergens": { "type": "array", "items": { "$ref": "#/components/schemas/Allergen" }, "description": "Аллергены блюда из справочника" }
+        }
+      },
+      "MenuItemOwner": {
+        "allOf": [
+          { "$ref": "#/components/schemas/MenuItemPublic" },
+          { "type": "object", "properties": { "is_available": { "type": "boolean", "example": true } } }
+        ]
+      },
+      "MenuItemCreate": {
+        "type": "object",
+        "required": ["name", "price"],
+        "properties": {
+          "name": { "type": "string", "example": "Чизбургер" },
+          "description": { "type": "string", "example": "Классический чизбургер с говядиной" },
+          "price": { "type": "number", "example": 150 },
+          "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/cheeseburger.jpg" },
+          "calories": { "type": "integer", "example": 400 },
+          "proteins": { "type": "number", "example": 15 },
+          "fats": { "type": "number", "example": 20 },
+          "carbs": { "type": "number", "example": 40 },
+          "allergen_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3], "description": "ID аллергенов из справочника" }
+        }
+      },
+      "CartItem": {
+        "type": "object",
+        "properties": {
+          "menu_item_id": { "type": "integer", "example": 105 },
+          "name": { "type": "string", "example": "Чизбургер" },
+          "price": { "type": "number", "example": 150 },
+          "quantity": { "type": "integer", "example": 2 },
+          "subtotal": { "type": "number", "example": 300 }
+        }
+      },
+      "Cart": {
+        "type": "object",
+        "properties": {
+          "restaurant_id": { "type": "integer", "example": 1 },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } },
+          "subtotal": { "type": "number", "example": 300 }
+        }
+      },
+      "OrderListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 4501 },
+          "restaurant_name": { "type": "string", "example": "Сакура" },
+          "status": { "type": "string", "enum": ["created", "cooking", "ready_for_pickup", "completed", "cancelled"], "example": "ready_for_pickup" },
+          "total": { "type": "number", "example": 300 },
+          "pickup_time": { "type": "string", "format": "date-time", "example": "2025-05-20T14:30:00Z" },
+          "created_at": { "type": "string", "format": "date-time", "example": "2025-05-19T10:15:00Z" }
+        }
+      },
+      "OrderDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/OrderListItem" },
+          {
+            "type": "object",
+            "properties": {
+              "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
+              "items": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } },
+              "comment": { "type": "string", "example": "Без лука" },
+              "payment_method": { "type": "string", "enum": ["card_online", "cash_on_receipt"], "example": "card_online" },
+              "promo_code": { "type": "string", "nullable": true, "example": "STUDENT" },
+              "promo_discount_percent": { "type": "number", "nullable": true, "example": 10 },
+              "subscription_discount_percent": { "type": "number", "nullable": true, "example": 5, "description": "5% если is_premium, иначе null" },
+              "total_discount": { "type": "number", "example": 45, "description": "Итоговая сумма скидки (применяется наибольшая: промокод или подписка)" }
+            }
+          }
+        ]
+      },
+      "OwnerOrderListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 4501 },
+          "status": { "type": "string", "example": "cooking" },
+          "customer_name": { "type": "string", "example": "Иван" },
+          "pickup_time": { "type": "string", "format": "date-time", "example": "2025-05-20T14:30:00Z" },
+          "is_premium_client": { "type": "boolean", "example": true, "description": "Premium-клиенты отображаются первыми" }
+        }
+      },
+      "OwnerOrderDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/OwnerOrderListItem" },
+          {
+            "type": "object",
+            "properties": {
+              "customer_phone": { "type": "string", "example": "+79001234567" },
+              "items": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } },
+              "comment": { "type": "string", "example": "Без лука" }
+            }
+          }
+        ]
+      },
+      "PromoCode": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 5 },
+          "code": { "type": "string", "example": "STUDENT" },
+          "discount_percent": { "type": "number", "example": 10 },
+          "is_active": { "type": "boolean", "example": true },
+          "expires_at": { "type": "string", "format": "date-time", "example": "2025-12-31T23:59:59Z" }
+        }
+      },
+      "SubscriptionPlan": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Студент+" },
+          "price": { "type": "number", "example": 199 },
+          "duration_days": { "type": "integer", "example": 30 },
+          "features": { "type": "array", "items": { "type": "string" }, "example": ["Доступ к ИИ-нутрициологу", "Скидка 5% на все заказы", "Приоритетная готовка"] }
+        }
+      },
+      "UserSubscription": {
+        "type": "object",
+        "properties": {
+          "plan": { "$ref": "#/components/schemas/SubscriptionPlan" },
+          "expires_at": { "type": "string", "format": "date-time", "example": "2025-06-10T00:00:00Z" },
+          "is_active": { "type": "boolean", "example": true },
+          "is_cancelled": { "type": "boolean", "example": false, "description": "true, если подписка отменена, но ещё действует до expires_at" }
+        }
+      },
+      "ReviewCreate": {
+        "type": "object",
+        "required": ["rating"],
+        "properties": {
+          "rating": { "type": "integer", "example": 5, "minimum": 1, "maximum": 5 }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 123 },
+          "rating": { "type": "integer", "example": 5, "minimum": 1, "maximum": 5 },
+          "created_at": { "type": "string", "format": "date-time", "example": "2025-05-21T12:00:00Z" }
+        }
+      },
+      "AIRecommendation": {
+        "type": "object",
+        "properties": {
+          "ai_text": { "type": "string", "example": "Отличный выбор! Вот подходящие блюда до 500 ккал без глютена:" },
+          "recommended_dish_ids": { "type": "array", "items": { "type": "integer" }, "example": [105, 203] }
+        }
+      },
+      "AdminStats": {
+        "type": "object",
+        "properties": {
+          "orders_today": { "type": "integer", "example": 150 },
+          "revenue_total": { "type": "number", "example": 500000.00 },
+          "active_subscriptions_count": { "type": "integer", "example": 45 }
+        }
+      },
+      "WebSocketEvent": {
+        "type": "object",
+        "description": "Формат события WebSocket (WS /ws/orders?token=JWT). Не REST-эндпоинт.",
+        "properties": {
+          "event": { "type": "string", "enum": ["order_status_changed"], "example": "order_status_changed" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "order_id": { "type": "integer", "example": 4501 },
+              "new_status": { "type": "string", "example": "ready_for_pickup" },
+              "message": { "type": "string", "example": "Ваш заказ готов! Можно забирать." }
+            }
+          }
+        }
+      },
+      "PaginatedResponse_RestaurantPublic": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/RestaurantPublic" } },
+          "total": { "type": "integer", "example": 42 },
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "pages": { "type": "integer", "example": 3 }
+        }
+      },
+      "PaginatedResponse_RestaurantAdmin": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/RestaurantAdmin" } },
+          "total": { "type": "integer", "example": 10 },
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "pages": { "type": "integer", "example": 1 }
+        }
+      },
+      "PaginatedResponse_OrderListItem": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/OrderListItem" } },
+          "total": { "type": "integer", "example": 15 },
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "pages": { "type": "integer", "example": 1 }
+        }
+      },
+      "PaginatedResponse_OwnerOrderListItem": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/OwnerOrderListItem" } },
+          "total": { "type": "integer", "example": 5 },
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "pages": { "type": "integer", "example": 1 }
+        }
+      },
+      "PaginatedResponse_PromoCode": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/PromoCode" } },
+          "total": { "type": "integer", "example": 3 },
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "pages": { "type": "integer", "example": 1 }
+        }
+      },
+      "PaginatedResponse_UserProfile": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/UserProfile" } },
+          "total": { "type": "integer", "example": 100 },
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 20 },
+          "pages": { "type": "integer", "example": 5 }
+        }
+      }
+    }
+  }
+}
