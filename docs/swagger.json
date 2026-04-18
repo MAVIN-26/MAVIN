@@ -276,7 +276,8 @@
           { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
           { "name": "search", "in": "query", "schema": { "type": "string" } },
           { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["rating_desc", "rating_asc", "name_asc", "name_desc"] } }
         ],
         "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedResponse_RestaurantPublic" } } } } }
       }
@@ -310,7 +311,9 @@
                   "name": { "type": "string", "example": "Бургер Кинг" },
                   "description": { "type": "string", "example": "Лучшие бургеры в городе" },
                   "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
-                  "pickup_address": { "type": "string", "example": "ул. Ленина, 10" }
+                  "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
+                  "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
+                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 }
                 }
               }
             }
@@ -345,7 +348,9 @@
                   "name": { "type": "string", "example": "Суши Мастер" },
                   "pickup_address": { "type": "string", "example": "пр. Мира, 15" },
                   "restaurant_admin_id": { "type": "integer", "example": 42 },
-                  "category_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3] }
+                  "category_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3] },
+                  "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
+                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 }
                 }
               }
             }
@@ -357,7 +362,7 @@
     "/admin/restaurants/{id}": {
       "put": {
         "tags": ["Restaurants (Site Admin)"],
-        "summary": "Изменить статус ресторана",
+        "summary": "Редактировать ресторан",
         "security": [{ "bearerAuth": [] }],
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "requestBody": {
@@ -366,9 +371,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["is_active"],
                 "properties": {
-                  "is_active": { "type": "boolean", "example": true }
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "photo_url": { "type": "string" },
+                  "pickup_address": { "type": "string" },
+                  "is_active": { "type": "boolean", "example": true },
+                  "category_ids": { "type": "array", "items": { "type": "integer" } },
+                  "restaurant_admin_id": { "type": "integer" },
+                  "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
+                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 }
                 }
               }
             }
@@ -395,6 +407,26 @@
           { "name": "exclude_allergen_ids", "in": "query", "description": "ID аллергенов для исключения (через запятую)", "schema": { "type": "string", "example": "1,3" } }
         ],
         "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuItemPublic" } } } } } }
+      }
+    },
+    "/restaurants/{id}/menu/user-choice": {
+      "get": {
+        "tags": ["Menu (Public)"],
+        "summary": "Выбор пользователей (топ блюд за 30 дней)",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuItemPublic" } } } } } }
+      }
+    },
+    "/restaurants/{id}/menu-categories": {
+      "get": {
+        "tags": ["Menu Categories (Public)"],
+        "summary": "Категории меню ресторана",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuCategory" } } } } } }
       }
     },
     "/owner/menu": {
@@ -464,6 +496,74 @@
           }
         },
         "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MenuItemOwner" } } } } }
+      }
+    },
+    "/owner/menu-categories": {
+      "get": {
+        "tags": ["Menu Categories (Restaurant Admin)"],
+        "summary": "Список категорий меню своего ресторана",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuCategory" } } } } } }
+      },
+      "post": {
+        "tags": ["Menu Categories (Restaurant Admin)"],
+        "summary": "Создать категорию меню",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Супы" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Создано", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MenuCategory" } } } },
+          "409": { "description": "Категория с таким именем уже существует" }
+        }
+      }
+    },
+    "/owner/menu-categories/{id}": {
+      "put": {
+        "tags": ["Menu Categories (Restaurant Admin)"],
+        "summary": "Изменить категорию меню",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Первые блюда" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ОК", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MenuCategory" } } } },
+          "403": { "description": "Категория не принадлежит вашему ресторану" },
+          "409": { "description": "Категория с таким именем уже существует" }
+        }
+      },
+      "delete": {
+        "tags": ["Menu Categories (Restaurant Admin)"],
+        "summary": "Удалить категорию меню (блюда остаются, их menu_category_id = null)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "Удалено" },
+          "403": { "description": "Категория не принадлежит вашему ресторану" }
+        }
       }
     },
     "/cart": {
@@ -1042,7 +1142,11 @@
           "description": { "type": "string", "example": "Лучшие бургеры в городе" },
           "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
           "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
-          "average_rating": { "type": "number", "format": "float", "example": 4.8, "minimum": 0, "maximum": 5 }
+          "average_rating": { "type": "number", "format": "float", "example": 4.8, "minimum": 0, "maximum": 5 },
+          "review_count": { "type": "integer", "example": 323 },
+          "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
+          "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+          "categories": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
         }
       },
       "RestaurantOwner": {
@@ -1054,7 +1158,11 @@
           "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
           "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
           "is_active": { "type": "boolean", "example": true },
-          "average_rating": { "type": "number", "format": "float", "example": 4.8 }
+          "average_rating": { "type": "number", "format": "float", "example": 4.8 },
+          "review_count": { "type": "integer", "example": 323 },
+          "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
+          "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+          "categories": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
         }
       },
       "RestaurantAdmin": {
@@ -1063,7 +1171,20 @@
           "id": { "type": "integer", "example": 1 },
           "name": { "type": "string", "example": "Суши Мастер" },
           "restaurant_admin_id": { "type": "integer", "example": 42 },
-          "is_active": { "type": "boolean", "example": true }
+          "is_active": { "type": "boolean", "example": true },
+          "review_count": { "type": "integer", "example": 0 },
+          "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
+          "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+          "categories": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
+        }
+      },
+      "MenuCategory": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 10 },
+          "restaurant_id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Супы" },
+          "sort_order": { "type": "integer", "example": 0 }
         }
       },
       "MenuItemPublic": {
@@ -1078,6 +1199,8 @@
           "proteins": { "type": "number", "example": 15 },
           "fats": { "type": "number", "example": 20 },
           "carbs": { "type": "number", "example": 40 },
+          "weight_grams": { "type": "integer", "nullable": true, "example": 250 },
+          "menu_category_id": { "type": "integer", "nullable": true, "example": 10 },
           "allergens": { "type": "array", "items": { "$ref": "#/components/schemas/Allergen" }, "description": "Аллергены блюда из справочника" }
         }
       },
@@ -1099,6 +1222,8 @@
           "proteins": { "type": "number", "example": 15 },
           "fats": { "type": "number", "example": 20 },
           "carbs": { "type": "number", "example": 40 },
+          "weight_grams": { "type": "integer", "nullable": true, "example": 250 },
+          "menu_category_id": { "type": "integer", "nullable": true, "example": 10, "description": "ID категории меню этого ресторана" },
           "allergen_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3], "description": "ID аллергенов из справочника" }
         }
       },
