@@ -558,12 +558,13 @@
       },
       "delete": {
         "tags": ["Menu Categories (Restaurant Admin)"],
-        "summary": "Удалить категорию меню (блюда остаются, их menu_category_id = null)",
+        "summary": "Удалить категорию меню (нельзя, если в ней есть блюда)",
         "security": [{ "bearerAuth": [] }],
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": {
           "204": { "description": "Удалено" },
-          "403": { "description": "Категория не принадлежит вашему ресторану" }
+          "403": { "description": "Категория не принадлежит вашему ресторану" },
+          "409": { "description": "В категории есть блюда — сначала перенесите или удалите их" }
         }
       }
     },
@@ -1201,7 +1202,7 @@
           "fats": { "type": "number", "example": 20 },
           "carbs": { "type": "number", "example": 40 },
           "weight_grams": { "type": "integer", "nullable": true, "example": 250 },
-          "menu_category_id": { "type": "integer", "nullable": true, "example": 10 },
+          "menu_category_id": { "type": "integer", "example": 10 },
           "allergens": { "type": "array", "items": { "$ref": "#/components/schemas/Allergen" }, "description": "Аллергены блюда из справочника" }
         }
       },
@@ -1213,7 +1214,7 @@
       },
       "MenuItemCreate": {
         "type": "object",
-        "required": ["name", "price"],
+        "required": ["name", "price", "menu_category_id"],
         "properties": {
           "name": { "type": "string", "example": "Чизбургер" },
           "description": { "type": "string", "example": "Классический чизбургер с говядиной" },
@@ -1224,7 +1225,7 @@
           "fats": { "type": "number", "example": 20 },
           "carbs": { "type": "number", "example": 40 },
           "weight_grams": { "type": "integer", "nullable": true, "example": 250 },
-          "menu_category_id": { "type": "integer", "nullable": true, "example": 10, "description": "ID категории меню этого ресторана" },
+          "menu_category_id": { "type": "integer", "example": 10, "description": "ID категории меню этого ресторана (обязательно)" },
           "allergen_ids": { "type": "array", "items": { "type": "integer" }, "example": [1, 3], "description": "ID аллергенов из справочника" }
         }
       },
