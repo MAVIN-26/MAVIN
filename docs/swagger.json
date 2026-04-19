@@ -404,6 +404,9 @@
           { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
           { "name": "max_calories", "in": "query", "description": "Максимум калорий на блюдо", "schema": { "type": "integer" } },
           { "name": "max_price", "in": "query", "description": "Максимальная цена", "schema": { "type": "number" } },
+          { "name": "max_proteins", "in": "query", "description": "Максимум белков, г", "schema": { "type": "number" } },
+          { "name": "max_fats", "in": "query", "description": "Максимум жиров, г", "schema": { "type": "number" } },
+          { "name": "max_carbs", "in": "query", "description": "Максимум углеводов, г", "schema": { "type": "number" } },
           { "name": "exclude_allergen_ids", "in": "query", "description": "ID аллергенов для исключения (через запятую)", "schema": { "type": "string", "example": "1,3" } }
         ],
         "responses": { "200": { "description": "ОК", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MenuItemPublic" } } } } } }
