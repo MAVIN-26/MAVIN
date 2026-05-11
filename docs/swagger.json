@@ -313,7 +313,9 @@
                   "photo_url": { "type": "string", "example": "https://minio.example.com/mavin-images/bk.jpg" },
                   "pickup_address": { "type": "string", "example": "ул. Ленина, 10" },
                   "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
-                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 }
+                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+                  "card_bg_color": { "type": "string", "nullable": true, "example": "#FFE5B4" },
+                  "card_bg_image_url": { "type": "string", "nullable": true, "example": "https://minio.example.com/mavin-images/bk-bg.jpg" }
                 }
               }
             }
@@ -380,7 +382,9 @@
                   "category_ids": { "type": "array", "items": { "type": "integer" } },
                   "restaurant_admin_id": { "type": "integer" },
                   "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
-                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 }
+                  "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+                  "card_bg_color": { "type": "string", "nullable": true, "example": "#FFE5B4" },
+                  "card_bg_image_url": { "type": "string", "nullable": true, "example": "https://minio.example.com/mavin-images/sushi-bg.jpg" }
                 }
               }
             }
@@ -1151,6 +1155,8 @@
           "review_count": { "type": "integer", "example": 323 },
           "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
           "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+          "card_bg_color": { "type": "string", "nullable": true, "example": "#FFE5B4" },
+          "card_bg_image_url": { "type": "string", "nullable": true, "example": "https://minio.example.com/mavin-images/bk-bg.jpg" },
           "categories": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
         }
       },
@@ -1167,6 +1173,8 @@
           "review_count": { "type": "integer", "example": 323 },
           "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
           "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+          "card_bg_color": { "type": "string", "nullable": true, "example": "#FFE5B4" },
+          "card_bg_image_url": { "type": "string", "nullable": true, "example": "https://minio.example.com/mavin-images/bk-bg.jpg" },
           "categories": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
         }
       },
@@ -1193,6 +1201,8 @@
           "review_count": { "type": "integer", "example": 0 },
           "preparation_time_min": { "type": "integer", "nullable": true, "example": 25 },
           "preparation_time_max": { "type": "integer", "nullable": true, "example": 35 },
+          "card_bg_color": { "type": "string", "nullable": true, "example": "#FFE5B4" },
+          "card_bg_image_url": { "type": "string", "nullable": true, "example": "https://minio.example.com/mavin-images/sushi-bg.jpg" },
           "categories": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } },
           "is_active": { "type": "boolean", "example": true },
           "restaurant_admin_id": { "type": "integer", "nullable": true, "example": 42 },
